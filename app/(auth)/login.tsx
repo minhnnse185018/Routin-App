@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,47 +7,145 @@ import {
   StatusBar,
   Image,
   ImageBackground,
+  TextInput,
+  ActivityIndicator,
+  Alert,
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import apiService from '../../src/services/api.service';
+import { StorageService } from '../../src/utils/storage';
+import { validateLoginForm } from '../../src/utils/validation';
+import { KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
 
 export default function Login() {
   const router = useRouter();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
+  const handleLogin = async () => {
+    // Validate form
+    const validation = validateLoginForm(email, password);
+    if (!validation.isValid) {
+      const errorMessages = validation.errors.map(e => e.message).join('\n');
+      Alert.alert('Validation Error', errorMessages);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await apiService.login({
+        email: email.trim(),
+        password,
+      });
+
+      if (response.success && response.data) {
+        // Save token and user data
+        await StorageService.saveToken(response.data.token);
+        if (response.data.refreshToken) {
+          await StorageService.saveRefreshToken(response.data.refreshToken);
+        }
+        await StorageService.saveUser(response.data.user);
+
+        Alert.alert('Success', 'Login successful!', [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Navigate to main app (you'll need to create this route)
+              // router.replace('/(tabs)/home');
+              console.log('User logged in:', response.data?.user);
+            },
+          },
+        ]);
+      } else {
+        Alert.alert('Login Failed', response.error || 'Invalid credentials');
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Something went wrong');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    try {
+      const response = await apiService.googleSignIn('mock_google_token');
       
-      {/* Background Image */}
-      <ImageBackground
-        source={{ uri: 'https://api.builder.io/api/v1/image/assets/TEMP/54561f3262bb8537c5dc49ba77122da4d765f5a3?width=1526' }}
-        style={styles.backgroundImage}
-        blurRadius={2}
-      />
+      if (response.success && response.data) {
+        await StorageService.saveToken(response.data.token);
+        await StorageService.saveUser(response.data.user);
+        Alert.alert('Success', 'Signed in with Google!');
+        console.log('Google user:', response.data.user);
+      } else {
+        Alert.alert('Error', response.error || 'Google sign in failed');
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Something went wrong');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      {/* Status Bar Area */}
-      <View style={styles.statusBar}>
-        <Text style={styles.time}>9:41</Text>
-        <View style={styles.dynamicIsland} />
-        <View style={styles.statusIconsContainer}>
-          <View style={styles.signalBars}>
-            <View style={[styles.signalBar, styles.signalBar1]} />
-            <View style={[styles.signalBar, styles.signalBar2]} />
-            <View style={[styles.signalBar, styles.signalBar3]} />
-            <View style={[styles.signalBar, styles.signalBar4]} />
-          </View>
-          <View style={styles.wifiIcon}>
-            <View style={styles.wifiArc} />
-          </View>
-          <View style={styles.batteryIcon}>
-            <View style={styles.batteryFill} />
-            <View style={styles.batteryTip} />
-          </View>
-        </View>
-      </View>
+  const handleFacebookSignIn = async () => {
+    setLoading(true);
+    try {
+      const response = await apiService.facebookSignIn('mock_facebook_token');
+      
+      if (response.success && response.data) {
+        await StorageService.saveToken(response.data.token);
+        await StorageService.saveUser(response.data.user);
+        Alert.alert('Success', 'Signed in with Facebook!');
+      } else {
+        Alert.alert('Error', response.error || 'Facebook sign in failed');
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Something went wrong');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      {/* Main Content */}
-      <View style={styles.content}>
-        {/* App Title */}
+  const handleAppleSignIn = async () => {
+    setLoading(true);
+    try {
+      const response = await apiService.appleSignIn('mock_apple_token');
+      
+      if (response.success && response.data) {
+        await StorageService.saveToken(response.data.token);
+        await StorageService.saveUser(response.data.user);
+        Alert.alert('Success', 'Signed in with Apple!');
+      } else {
+        Alert.alert('Error', response.error || 'Apple sign in failed');
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Something went wrong');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+return (
+  <View style={styles.container}>
+    <StatusBar barStyle="light-content" />
+
+    <ImageBackground
+      source={{ uri: 'https://api.builder.io/api/v1/image/assets/TEMP/54561f3262bb8537c5dc49ba77122da4d765f5a3?width=1526' }}
+      style={styles.backgroundImage}
+      blurRadius={2}
+    />
+
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.titleContainer}>
           <Text style={styles.appTitle}>
             <Text style={styles.appTitleWhite}>Rou</Text>
@@ -55,7 +153,6 @@ export default function Login() {
           </Text>
         </View>
 
-        {/* Tagline */}
         <View style={styles.taglineContainer}>
           <Text style={styles.tagline}>
             <Text style={styles.taglineWhite}>Discover millions of{'\n'}</Text>
@@ -64,15 +161,60 @@ export default function Login() {
           </Text>
         </View>
 
-        {/* Bottom Card */}
         <View style={styles.bottomCard}>
+          {/* inputs + buttons như cũ */}
+          
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="Email (test@example.com)"
+              placeholderTextColor="#727272"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              editable={!loading}
+              returnKeyType="next"
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="Password (password123)"
+              placeholderTextColor="#727272"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoCapitalize="none"
+              editable={!loading}
+              returnKeyType="done"
+              onSubmitEditing={Keyboard.dismiss}
+            />
+          </View>
+
           {/* Login Button */}
-          <TouchableOpacity style={styles.loginButton}>
-            <Text style={styles.loginButtonText}>Login</Text>
+          <TouchableOpacity 
+            style={[
+              styles.loginButton,
+              loading && { opacity: 0.6 }
+            ]}
+            onPress={handleLogin}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#000000" />
+            ) : (
+              <Text style={styles.loginButtonText}>Login</Text>
+            )}
           </TouchableOpacity>
 
           {/* Google Sign In */}
-          <TouchableOpacity style={styles.socialButton}>
+          <TouchableOpacity 
+            style={styles.socialButton}
+            onPress={handleGoogleSignIn}
+            disabled={loading}
+          >
             <View style={styles.socialButtonContent}>
               <View style={styles.googleIcon}>
                 <View style={styles.googleIconBlue} />
@@ -85,7 +227,11 @@ export default function Login() {
           </TouchableOpacity>
 
           {/* Facebook Sign In */}
-          <TouchableOpacity style={styles.socialButton}>
+          <TouchableOpacity 
+            style={styles.socialButton}
+            onPress={handleFacebookSignIn}
+            disabled={loading}
+          >
             <View style={styles.socialButtonContent}>
               <View style={styles.facebookIcon} />
               <Text style={styles.socialButtonText}>Continue with Facebook</Text>
@@ -93,7 +239,11 @@ export default function Login() {
           </TouchableOpacity>
 
           {/* Apple Sign In */}
-          <TouchableOpacity style={styles.socialButton}>
+          <TouchableOpacity 
+            style={styles.socialButton}
+            onPress={handleAppleSignIn}
+            disabled={loading}
+          >
             <View style={styles.socialButtonContent}>
               <View style={styles.appleIcon} />
               <Text style={styles.socialButtonText}>Continue with Apple</Text>
@@ -104,13 +254,15 @@ export default function Login() {
           <TouchableOpacity 
             style={styles.signUpContainer}
             onPress={() => router.push('/(auth)/signup')}
+            disabled={loading}
           >
-            <Text style={styles.signUpText}>Sign up</Text>
+            <Text style={styles.signUpText}>Don't have an account? Sign up</Text>
           </TouchableOpacity>
         </View>
-      </View>
-    </View>
-  );
+      </ScrollView>
+    </KeyboardAvoidingView>
+  </View>
+);
 }
 
 const styles = StyleSheet.create({
@@ -124,6 +276,10 @@ const styles = StyleSheet.create({
     height: 954,
     left: -288,
     top: -80,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'space-between',
   },
   statusBar: {
     flexDirection: 'row',
@@ -257,6 +413,20 @@ const styles = StyleSheet.create({
     paddingTop: 58,
     paddingBottom: 40,
     minHeight: 352,
+  },
+  inputContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 87.273,
+    height: 40,
+    justifyContent: 'center',
+    paddingHorizontal: 13,
+    marginBottom: 12,
+  },
+  input: {
+    color: '#000000',
+    fontFamily: 'SF Pro Display',
+    fontSize: 14,
+    fontWeight: '600',
   },
   loginButton: {
     backgroundColor: '#AEFF00',

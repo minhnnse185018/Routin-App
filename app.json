@@ -4,11 +4,9 @@
     "slug": "routin-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "scheme": "routin",
     "splash": {
-      "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#161616"
     },
@@ -17,19 +15,19 @@
       "bundleIdentifier": "com.routin.app"
     },
     "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#161616"
-      },
       "package": "com.routin.app"
     },
     "web": {
       "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/favicon.png"
+      "output": "static"
     },
     "plugins": [
       "expo-router"
-    ]
+    ],
+    "extra": {
+      "useMockApi": true,
+      "apiBaseUrl": "http://localhost:3000/api",
+      "apiTimeout": 30000
+    }
   }
 }

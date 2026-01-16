@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -7,40 +7,91 @@ import {
   StatusBar,
   TextInput,
   ScrollView,
-} from 'react-native';
-import { useRouter } from 'expo-router';
+  ActivityIndicator,
+  Alert,
+} from "react-native";
+import { useRouter } from "expo-router";
+import apiService from "../../src/services/api.service";
+import { StorageService } from "../../src/utils/storage";
+import { validateSignUpForm } from "../../src/utils/validation";
 
 export default function SignUp() {
   const router = useRouter();
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSignUp = async () => {
+    // Validate form
+    const validation = validateSignUpForm(firstName, lastName, email, password);
+    if (!validation.isValid) {
+      const errorMessages = validation.errors.map(e => e.message).join('\n');
+      Alert.alert("Validation Error", errorMessages);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await apiService.signUp({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email: email.trim(),
+        password,
+      });
+
+      if (response.success && response.data) {
+        // Save token and user data
+        await StorageService.saveToken(response.data.token);
+        if (response.data.refreshToken) {
+          await StorageService.saveRefreshToken(response.data.refreshToken);
+        }
+        await StorageService.saveUser(response.data.user);
+
+        Alert.alert("Success", "Account created successfully!", [
+          {
+            text: "OK",
+            onPress: () => {
+              // Navigate to main app (you'll need to create this route)
+              // router.replace("/(tabs)/home");
+              console.log("User signed up:", response.data?.user);
+            },
+          },
+        ]);
+      } else {
+        Alert.alert("Sign Up Failed", response.error || "Unable to create account");
+      }
+    } catch (error: any) {
+      Alert.alert("Error", error.message || "Something went wrong");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    try {
+      const response = await apiService.googleSignIn("mock_google_token");
+      
+      if (response.success && response.data) {
+        await StorageService.saveToken(response.data.token);
+        await StorageService.saveUser(response.data.user);
+        Alert.alert("Success", "Signed in with Google!");
+        console.log("Google user:", response.data.user);
+      } else {
+        Alert.alert("Error", response.error || "Google sign in failed");
+      }
+    } catch (error: any) {
+      Alert.alert("Error", error.message || "Something went wrong");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
-      
-      {/* Status Bar Area */}
-      <View style={styles.statusBar}>
-        <Text style={styles.time}>9:41</Text>
-        <View style={styles.dynamicIsland} />
-        <View style={styles.statusIconsContainer}>
-          <View style={styles.signalBars}>
-            <View style={[styles.signalBar, styles.signalBar1]} />
-            <View style={[styles.signalBar, styles.signalBar2]} />
-            <View style={[styles.signalBar, styles.signalBar3]} />
-            <View style={[styles.signalBar, styles.signalBar4]} />
-          </View>
-          <View style={styles.wifiIcon}>
-            <View style={styles.wifiArc} />
-          </View>
-          <View style={styles.batteryIcon}>
-            <View style={styles.batteryFill} />
-            <View style={styles.batteryTip} />
-          </View>
-        </View>
-      </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Page Title */}
@@ -51,7 +102,11 @@ export default function SignUp() {
         {/* Bottom Card */}
         <View style={styles.bottomCard}>
           {/* Google Sign In */}
-          <TouchableOpacity style={styles.googleButton}>
+          <TouchableOpacity 
+            style={styles.googleButton}
+            onPress={handleGoogleSignIn}
+            disabled={loading}
+          >
             <View style={styles.socialButtonContent}>
               <View style={styles.googleIcon}>
                 <View style={styles.googleIconBlue} />
@@ -77,6 +132,7 @@ export default function SignUp() {
                 placeholderTextColor="#727272"
                 value={firstName}
                 onChangeText={setFirstName}
+                editable={!loading}
               />
             </View>
             <View style={styles.nameInput}>
@@ -86,6 +142,7 @@ export default function SignUp() {
                 placeholderTextColor="#727272"
                 value={lastName}
                 onChangeText={setLastName}
+                editable={!loading}
               />
             </View>
           </View>
@@ -98,8 +155,7 @@ export default function SignUp() {
               placeholderTextColor="#727272"
               value={email}
               onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
+              editable={!loading}
             />
           </View>
 
@@ -107,24 +163,36 @@ export default function SignUp() {
           <View style={styles.fullInput}>
             <TextInput
               style={styles.input}
-              placeholder="Password"
+              placeholder="Password (min 8 chars, 1 uppercase, 1 number)"
               placeholderTextColor="#727272"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
+              editable={!loading}
             />
           </View>
 
           {/* Create Account Button */}
-          <TouchableOpacity style={styles.createAccountButton}>
-            <Text style={styles.createAccountButtonText}>Create Account</Text>
+          <TouchableOpacity 
+            style={[
+              styles.createAccountButton,
+              loading && { opacity: 0.6 }
+            ]}
+            onPress={handleSignUp}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#000000" />
+            ) : (
+              <Text style={styles.createAccountButtonText}>Create Account</Text>
+            )}
           </TouchableOpacity>
 
           {/* Terms Text */}
           <View style={styles.termsContainer}>
             <Text style={styles.termsText}>
               <Text style={styles.termsTextGray}>
-                Signing up for a Webflow account means you agree{'\n'}to the{' '}
+                Signing up for a Webflow account means you agree{"\n"}to the{" "}
               </Text>
               <Text style={styles.termsTextWhite}>Privacy Policy</Text>
               <Text style={styles.termsTextGray}> and </Text>
@@ -134,9 +202,9 @@ export default function SignUp() {
           </View>
 
           {/* Login Link */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.loginContainer}
-            onPress={() => router.push('/(auth)/login')}
+            onPress={() => router.push("/(auth)/login")}
           >
             <Text style={styles.loginText}>Have an account? Log in here</Text>
           </TouchableOpacity>
@@ -149,50 +217,51 @@ export default function SignUp() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#161616',
+    backgroundColor: "#161616",
   },
   scrollContent: {
     flexGrow: 1,
+    justifyContent: "space-between",
   },
   statusBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 16,
     paddingTop: 21,
     paddingBottom: 19,
     height: 62,
   },
   time: {
-    color: '#FFFFFF',
-    fontFamily: 'SF Pro',
+    color: "#FFFFFF",
+    fontFamily: "SF Pro",
     fontSize: 17,
-    fontWeight: '700',
+    fontWeight: "700",
     lineHeight: 22,
   },
   dynamicIsland: {
-    position: 'absolute',
+    position: "absolute",
     left: 136,
     top: 14,
     width: 129,
     height: 37,
     borderRadius: 102.401,
-    backgroundColor: '#000000',
+    backgroundColor: "#000000",
   },
   statusIconsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 7,
   },
   signalBars: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+    flexDirection: "row",
+    alignItems: "flex-end",
     gap: 1,
     height: 12,
   },
   signalBar: {
     width: 3,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 1,
   },
   signalBar1: {
@@ -210,50 +279,50 @@ const styles = StyleSheet.create({
   wifiIcon: {
     width: 15,
     height: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   wifiArc: {
     width: 12,
     height: 8,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: "#FFFFFF",
     borderBottomWidth: 0,
   },
   batteryIcon: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   batteryFill: {
     width: 21,
     height: 9,
     borderRadius: 2.5,
     borderWidth: 1,
-    borderColor: '#FFFFFF',
-    backgroundColor: '#FFFFFF',
+    borderColor: "#FFFFFF",
+    backgroundColor: "#FFFFFF",
   },
   batteryTip: {
     width: 1.5,
     height: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     opacity: 0.4,
     marginLeft: 1,
   },
   titleContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 94,
     marginBottom: 78,
   },
   pageTitle: {
-    color: '#FFFFFF',
-    fontFamily: 'SF Pro Display',
+    color: "#FFFFFF",
+    fontFamily: "SF Pro Display",
     fontSize: 66,
-    fontWeight: '700',
-    textAlign: 'center',
+    fontWeight: "700",
+    textAlign: "center",
   },
   bottomCard: {
-    backgroundColor: '#000000',
+    backgroundColor: "#000000",
     borderTopLeftRadius: 50,
     borderTopRightRadius: 50,
     paddingHorizontal: 62,
@@ -263,141 +332,141 @@ const styles = StyleSheet.create({
   },
   googleButton: {
     borderWidth: 1,
-    borderColor: '#C3C3C3',
+    borderColor: "#C3C3C3",
     borderRadius: 87.273,
     height: 40,
-    justifyContent: 'center',
+    justifyContent: "center",
     marginBottom: 15,
   },
   socialButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 12,
   },
   googleIcon: {
     width: 23,
     height: 24,
-    position: 'relative',
+    position: "relative",
   },
   googleIconBlue: {
-    position: 'absolute',
+    position: "absolute",
     width: 10,
     height: 10,
-    backgroundColor: '#4285F4',
+    backgroundColor: "#4285F4",
     borderRadius: 2,
     top: 0,
     right: 0,
   },
   googleIconRed: {
-    position: 'absolute',
+    position: "absolute",
     width: 10,
     height: 10,
-    backgroundColor: '#EA4335',
+    backgroundColor: "#EA4335",
     borderRadius: 2,
     top: 0,
     left: 0,
   },
   googleIconYellow: {
-    position: 'absolute',
+    position: "absolute",
     width: 10,
     height: 10,
-    backgroundColor: '#FBBC05',
+    backgroundColor: "#FBBC05",
     borderRadius: 2,
     bottom: 0,
     left: 0,
   },
   googleIconGreen: {
-    position: 'absolute',
+    position: "absolute",
     width: 10,
     height: 10,
-    backgroundColor: '#34A853',
+    backgroundColor: "#34A853",
     borderRadius: 2,
     bottom: 0,
     right: 0,
   },
   socialButtonText: {
-    color: '#FFFFFF',
-    fontFamily: 'SF Pro Display',
+    color: "#FFFFFF",
+    fontFamily: "SF Pro Display",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   dividerContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     marginVertical: 15,
   },
   dividerText: {
-    color: '#FFFFFF',
-    fontFamily: 'SF Pro Display',
+    color: "#FFFFFF",
+    fontFamily: "SF Pro Display",
     fontSize: 27,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   nameRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 14,
     marginBottom: 8,
   },
   nameInput: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 87.273,
     height: 36,
-    justifyContent: 'center',
+    justifyContent: "center",
     paddingHorizontal: 13,
   },
   fullInput: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 87.273,
     height: 36,
-    justifyContent: 'center',
+    justifyContent: "center",
     paddingHorizontal: 13,
     marginBottom: 8,
   },
   input: {
-    color: '#000000',
-    fontFamily: 'SF Pro Display',
+    color: "#000000",
+    fontFamily: "SF Pro Display",
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   createAccountButton: {
-    backgroundColor: '#AEFF00',
+    backgroundColor: "#AEFF00",
     borderRadius: 87.273,
     height: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     marginTop: 8,
     marginBottom: 15,
   },
   createAccountButtonText: {
-    color: '#000000',
-    fontFamily: 'SF Pro Display',
+    color: "#000000",
+    fontFamily: "SF Pro Display",
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   termsContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 44,
   },
   termsText: {
-    fontFamily: 'SF Pro Display',
+    fontFamily: "SF Pro Display",
     fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'center',
+    fontWeight: "600",
+    textAlign: "center",
     lineHeight: 14,
   },
   termsTextGray: {
-    color: '#CECECE',
+    color: "#CECECE",
   },
   termsTextWhite: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   loginContainer: {
-    alignItems: 'center',
+    alignItems: "center",
   },
   loginText: {
-    color: '#FFFFFF',
-    fontFamily: 'SF Pro Display',
+    color: "#FFFFFF",
+    fontFamily: "SF Pro Display",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 });
