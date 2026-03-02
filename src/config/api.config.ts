@@ -2,35 +2,37 @@
 export const API_ENDPOINTS = {
   // Auth endpoints
   AUTH: {
-    LOGIN: '/auth/login',
-    SIGNUP: '/auth/signup',
-    LOGOUT: '/auth/logout',
-    REFRESH_TOKEN: '/auth/refresh',
-    GOOGLE_AUTH: '/auth/google',
-    FACEBOOK_AUTH: '/auth/facebook',
-    APPLE_AUTH: '/auth/apple',
-    FORGOT_PASSWORD: '/auth/forgot-password',
-    RESET_PASSWORD: '/auth/reset-password',
-    VERIFY_EMAIL: '/auth/verify-email',
+    LOGIN: '/api/Auth/login',
+    REGISTER: '/api/Auth/register',
+    SEND_OTP: '/api/Auth/register/otp/send',
+    VERIFY_OTP: '/api/Auth/register/otp/verify',
+    LOGOUT: '/api/Auth/logout',
+    REFRESH_TOKEN: '/api/Auth/refresh',
+    GOOGLE_AUTH: '/api/Auth/google',
+    FACEBOOK_AUTH: '/api/Auth/facebook',
+    APPLE_AUTH: '/api/Auth/apple',
+    FORGOT_PASSWORD: '/api/Auth/forgot-password',
+    RESET_PASSWORD: '/api/Auth/reset-password',
+    VERIFY_EMAIL: '/api/Auth/verify-email',
   },
   
   // User endpoints
   USER: {
-    PROFILE: '/user/profile',
-    UPDATE_PROFILE: '/user/profile',
-    CHANGE_PASSWORD: '/user/change-password',
-    DELETE_ACCOUNT: '/user/account',
+    PROFILE: '/api/user/profile',
+    UPDATE_PROFILE: '/api/user/profile',
+    CHANGE_PASSWORD: '/api/user/change-password',
+    DELETE_ACCOUNT: '/api/user/account',
   },
   
   // Habits endpoints (for future)
   HABITS: {
-    LIST: '/habits',
-    CREATE: '/habits',
-    GET: (id: string) => `/habits/${id}`,
-    UPDATE: (id: string) => `/habits/${id}`,
-    DELETE: (id: string) => `/habits/${id}`,
-    PUBLIC: '/habits/public',
-    PROGRESS: (id: string) => `/habits/${id}/progress`,
+    LIST: '/api/habits',
+    CREATE: '/api/habits',
+    GET: (id: string) => `/api/habits/${id}`,
+    UPDATE: (id: string) => `/api/habits/${id}`,
+    DELETE: (id: string) => `/api/habits/${id}`,
+    PUBLIC: '/api/habits/public',
+    PROGRESS: (id: string) => `/api/habits/${id}/progress`,
   },
 };
 

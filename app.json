@@ -25,8 +25,7 @@
       "expo-router"
     ],
     "extra": {
-      "useMockApi": true,
-      "apiBaseUrl": "http://localhost:3000/api",
+      "apiBaseUrl": "https://routin.onrender.com",
       "apiTimeout": 30000
     }
   }

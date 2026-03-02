@@ -11,12 +11,18 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
+  Dimensions,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import apiService from '../../src/services/api.service';
 import { StorageService } from '../../src/utils/storage';
 import { validateLoginForm } from '../../src/utils/validation';
-import { KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
+import { KeyboardAvoidingView, Keyboard } from 'react-native';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const isWeb = Platform.OS === 'web';
+const isSmallScreen = SCREEN_WIDTH < 768;
 
 export default function Login() {
   const router = useRouter();
@@ -25,14 +31,22 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
+    console.log('🔵 Login button pressed');
+    console.log('📧 Email:', email);
+    console.log('🔑 Password length:', password.length);
+    
     // Validate form
     const validation = validateLoginForm(email, password);
+    console.log('🔍 Validation result:', validation);
+    
     if (!validation.isValid) {
       const errorMessages = validation.errors.map(e => e.message).join('\n');
+      console.log('❌ Validation failed:', errorMessages);
       Alert.alert('Validation Error', errorMessages);
       return;
     }
 
+    console.log('✅ Validation passed, starting login...');
     setLoading(true);
     try {
       const response = await apiService.login({
@@ -41,23 +55,19 @@ export default function Login() {
       });
 
       if (response.success && response.data) {
+        console.log('✅ Login successful, saving tokens...');
+        
         // Save token and user data
-        await StorageService.saveToken(response.data.token);
+        await StorageService.saveToken(response.data.accessToken);
         if (response.data.refreshToken) {
           await StorageService.saveRefreshToken(response.data.refreshToken);
         }
         await StorageService.saveUser(response.data.user);
 
-        Alert.alert('Success', 'Login successful!', [
-          {
-            text: 'OK',
-            onPress: () => {
-              // Navigate to main app (you'll need to create this route)
-              // router.replace('/(tabs)/home');
-              console.log('User logged in:', response.data?.user);
-            },
-          },
-        ]);
+        console.log('🏠 Navigating to home page...');
+        
+        // Navigate to home page
+        router.replace('/(tabs)/home');
       } else {
         Alert.alert('Login Failed', response.error || 'Invalid credentials');
       }
@@ -74,7 +84,7 @@ export default function Login() {
       const response = await apiService.googleSignIn('mock_google_token');
       
       if (response.success && response.data) {
-        await StorageService.saveToken(response.data.token);
+        await StorageService.saveToken(response.data.accessToken);
         await StorageService.saveUser(response.data.user);
         Alert.alert('Success', 'Signed in with Google!');
         console.log('Google user:', response.data.user);
@@ -94,7 +104,7 @@ export default function Login() {
       const response = await apiService.facebookSignIn('mock_facebook_token');
       
       if (response.success && response.data) {
-        await StorageService.saveToken(response.data.token);
+        await StorageService.saveToken(response.data.accessToken);
         await StorageService.saveUser(response.data.user);
         Alert.alert('Success', 'Signed in with Facebook!');
       } else {
@@ -113,7 +123,7 @@ export default function Login() {
       const response = await apiService.appleSignIn('mock_apple_token');
       
       if (response.success && response.data) {
-        await StorageService.saveToken(response.data.token);
+        await StorageService.saveToken(response.data.accessToken);
         await StorageService.saveUser(response.data.user);
         Alert.alert('Success', 'Signed in with Apple!');
       } else {
@@ -131,7 +141,7 @@ return (
     <StatusBar barStyle="light-content" />
 
     <ImageBackground
-      source={{ uri: 'https://api.builder.io/api/v1/image/assets/TEMP/54561f3262bb8537c5dc49ba77122da4d765f5a3?width=1526' }}
+      source={{ uri: 'https://cdn.builder.io/api/v1/image/assets/TEMP/54561f3262bb8537c5dc49ba77122da4d765f5a3?width=1526' }}
       style={styles.backgroundImage}
       blurRadius={2}
     />
@@ -272,14 +282,16 @@ const styles = StyleSheet.create({
   },
   backgroundImage: {
     position: 'absolute',
-    width: 763,
-    height: 954,
-    left: -288,
-    top: -80,
+    width: isWeb ? '100%' : 763,
+    height: isWeb ? '100%' : 954,
+    left: isWeb ? 0 : -288,
+    top: isWeb ? 0 : -80,
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'space-between',
+    alignItems: isWeb ? 'center' : 'stretch',
+    paddingHorizontal: isWeb && !isSmallScreen ? 0 : 0,
   },
   statusBar: {
     flexDirection: 'row',
@@ -373,11 +385,11 @@ const styles = StyleSheet.create({
   },
   titleContainer: {
     alignItems: 'center',
-    marginTop: 238,
+    marginTop: isWeb ? (isSmallScreen ? 100 : 150) : 238,
   },
   appTitle: {
     fontFamily: 'SF Pro',
-    fontSize: 53,
+    fontSize: isWeb ? (isSmallScreen ? 40 : 53) : 53,
     fontWeight: '700',
     textAlign: 'center',
   },
@@ -389,15 +401,16 @@ const styles = StyleSheet.create({
   },
   taglineContainer: {
     alignItems: 'center',
-    paddingHorizontal: 42,
+    paddingHorizontal: isWeb ? 20 : 42,
     marginTop: 7,
+    maxWidth: isWeb ? 600 : undefined,
   },
   tagline: {
     fontFamily: 'SF Pro Display',
-    fontSize: 27,
+    fontSize: isWeb ? (isSmallScreen ? 20 : 27) : 27,
     fontWeight: '700',
     textAlign: 'center',
-    lineHeight: 33,
+    lineHeight: isWeb ? (isSmallScreen ? 26 : 33) : 33,
   },
   taglineWhite: {
     color: '#FFFFFF',
@@ -409,15 +422,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
     borderTopLeftRadius: 50,
     borderTopRightRadius: 50,
-    paddingHorizontal: 62,
-    paddingTop: 58,
+    paddingHorizontal: isWeb ? (isSmallScreen ? 32 : 62) : 62,
+    paddingTop: isWeb ? (isSmallScreen ? 40 : 58) : 58,
     paddingBottom: 40,
     minHeight: 352,
+    width: isWeb ? '100%' : undefined,
+    maxWidth: isWeb ? 500 : undefined,
+    alignSelf: isWeb ? 'center' : undefined,
   },
   inputContainer: {
     backgroundColor: '#FFFFFF',
     borderRadius: 87.273,
-    height: 40,
+    height: isWeb ? 48 : 40,
     justifyContent: 'center',
     paddingHorizontal: 13,
     marginBottom: 12,
@@ -425,17 +441,19 @@ const styles = StyleSheet.create({
   input: {
     color: '#000000',
     fontFamily: 'SF Pro Display',
-    fontSize: 14,
+    fontSize: isWeb ? 16 : 14,
     fontWeight: '600',
-  },
+    outlineStyle: isWeb ? 'none' : undefined,
+  } as any,
   loginButton: {
     backgroundColor: '#AEFF00',
     borderRadius: 87.273,
-    height: 40,
+    height: isWeb ? 48 : 40,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
-  },
+    cursor: isWeb ? 'pointer' : undefined,
+  } as any,
   loginButtonText: {
     color: '#000000',
     fontFamily: 'SF Pro Display',
@@ -446,10 +464,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#C3C3C3',
     borderRadius: 87.273,
-    height: 40,
+    height: isWeb ? 48 : 40,
     justifyContent: 'center',
     marginBottom: 16,
-  },
+    cursor: isWeb ? 'pointer' : undefined,
+  } as any,
   socialButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -518,7 +537,8 @@ const styles = StyleSheet.create({
   signUpContainer: {
     marginTop: 21,
     alignItems: 'center',
-  },
+    cursor: isWeb ? 'pointer' : undefined,
+  } as any,
   signUpText: {
     color: '#FFFFFF',
     fontFamily: 'SF Pro Display',

@@ -47,9 +47,8 @@ export const validateLoginForm = (
 
   if (!password) {
     errors.push({ field: 'password', message: 'Password is required' });
-  } else if (password.length < 8) {
-    errors.push({ field: 'password', message: 'Password must be at least 8 characters' });
   }
+  // Removed strict password validation for login - only check if not empty
 
   return {
     isValid: errors.length === 0,
