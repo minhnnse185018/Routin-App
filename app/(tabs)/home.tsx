@@ -1,277 +1,433 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
-  Dimensions,
-  Platform,
   StatusBar,
+  Image,
+  Dimensions,
+  ScrollView,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { StorageService } from '../../src/utils/storage';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const isWeb = Platform.OS === 'web';
-const isSmallScreen = SCREEN_WIDTH < 768;
+const CARD_WIDTH = SCREEN_WIDTH - 0;
 
-export default function Home() {
-  const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+// ─── Types ────────────────────────────────────────────────────────────────────
+type Post = {
+  id: string;
+  userId: string;
+  username: string;
+  avatarUrl?: string;
+  images: string[];
+  caption: string;
+  timestamp: string;
+  likes: number;
+  comments: number;
+  shares: number;
+  liked: boolean;
+  saved: boolean;
+};
 
-  useEffect(() => {
-    loadUserData();
-  }, []);
+// ─── Post Card ────────────────────────────────────────────────────────────────
+function PostCard({ post, onLike, onSave }: { post: Post; onLike: (id: string) => void; onSave: (id: string) => void }) {
+  const [activeImage, setActiveImage] = useState(0);
 
-  const loadUserData = async () => {
-    try {
-      const userData = await StorageService.getUser();
-      setUser(userData);
-    } catch (error) {
-      console.error('Error loading user:', error);
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      await StorageService.clearAll();
-      router.replace('/(auth)/login');
-    } catch (error) {
-      console.error('Error logging out:', error);
-    }
+  const formatCount = (n: number) => {
+    if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+    return String(n);
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
-      
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header Section */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>Hello,</Text>
-            <Text style={styles.userName}>{user?.fullName || 'User'}</Text>
-          </View>
-          <TouchableOpacity 
-            style={styles.logoutButton}
-            onPress={handleLogout}
+    <View style={cardStyles.container}>
+      {/* Image Area */}
+      <View style={cardStyles.imageArea}>
+        {post.images.length > 0 ? (
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={(e) => {
+              const index = Math.round(e.nativeEvent.contentOffset.x / CARD_WIDTH);
+              setActiveImage(index);
+            }}
           >
-            <Ionicons name="log-out-outline" size={24} color="#FFFFFF" />
+            {post.images.map((img, i) => (
+              <Image key={i} source={{ uri: img }} style={cardStyles.image} resizeMode="cover" />
+            ))}
+          </ScrollView>
+        ) : (
+          <View style={cardStyles.imagePlaceholder}>
+            <Ionicons name="image-outline" size={48} color="#444" />
+          </View>
+        )}
+
+        {/* User header overlay */}
+        <View style={cardStyles.userRow}>
+          <View style={cardStyles.avatarSmall}>
+            {post.avatarUrl ? (
+              <Image source={{ uri: post.avatarUrl }} style={cardStyles.avatarImg} />
+            ) : (
+              <Ionicons name="person" size={20} color="#FFF" />
+            )}
+          </View>
+          <Text style={cardStyles.usernameOverlay}>{post.username}</Text>
+        </View>
+
+        {/* Bookmark */}
+        <TouchableOpacity style={cardStyles.bookmarkBtn} onPress={() => onSave(post.id)}>
+          <Ionicons
+            name={post.saved ? 'bookmark' : 'bookmark-outline'}
+            size={22}
+            color="#FFF"
+          />
+        </TouchableOpacity>
+
+        {/* Right actions */}
+        <View style={cardStyles.actions}>
+          <TouchableOpacity style={cardStyles.actionItem} onPress={() => onLike(post.id)}>
+            <Ionicons
+              name={post.liked ? 'heart' : 'heart'}
+              size={24}
+              color={post.liked ? '#FF0000' : '#FF0000'}
+            />
+            <Text style={cardStyles.actionCount}>{formatCount(post.likes)}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={cardStyles.actionItem}>
+            <Ionicons name="chatbubble-outline" size={24} color="#FFF" />
+            <Text style={cardStyles.actionCount}>{formatCount(post.comments)}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={cardStyles.actionItem}>
+            <Ionicons name="paper-plane-outline" size={24} color="#FFF" />
+            <Text style={cardStyles.actionCount}>{formatCount(post.shares)}</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Welcome Card */}
-        <View style={styles.welcomeCard}>
-          <Text style={styles.welcomeTitle}>Welcome to Routin!</Text>
-          <Text style={styles.welcomeText}>
-            Start building your smart habits today and track your progress.
-          </Text>
-        </View>
-
-        {/* Quick Stats */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <View style={styles.statIconContainer}>
-              <Ionicons name="checkmark-circle" size={32} color="#AEFF00" />
-            </View>
-            <Text style={styles.statNumber}>0</Text>
-            <Text style={styles.statLabel}>Habits</Text>
+        {/* Dot indicators */}
+        {post.images.length > 1 && (
+          <View style={cardStyles.dotsRow}>
+            {post.images.map((_, i) => (
+              <View
+                key={i}
+                style={[cardStyles.dot, i === activeImage && cardStyles.dotActive]}
+              />
+            ))}
           </View>
+        )}
+      </View>
 
-          <View style={styles.statCard}>
-            <View style={styles.statIconContainer}>
-              <Ionicons name="flame" size={32} color="#FF6B6B" />
-            </View>
-            <Text style={styles.statNumber}>0</Text>
-            <Text style={styles.statLabel}>Day Streak</Text>
+      {/* Caption row */}
+      <View style={cardStyles.captionRow}>
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', gap: 6, marginBottom: 2 }}>
+            <Text style={cardStyles.captionUser}>{post.username}</Text>
+            <Text style={cardStyles.captionText}>{post.caption}</Text>
           </View>
-
-          <View style={styles.statCard}>
-            <View style={styles.statIconContainer}>
-              <Ionicons name="trophy" size={32} color="#FFD700" />
-            </View>
-            <Text style={styles.statNumber}>0</Text>
-            <Text style={styles.statLabel}>Achievements</Text>
-          </View>
+          <Text style={cardStyles.timestamp}>{post.timestamp}</Text>
         </View>
-
-        {/* Today's Habits Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Today's Habits</Text>
-          <View style={styles.emptyState}>
-            <Ionicons name="calendar-outline" size={64} color="#727272" />
-            <Text style={styles.emptyStateText}>No habits yet</Text>
-            <Text style={styles.emptyStateSubtext}>
-              Go to Habits tab to create your first habit
-            </Text>
-            <TouchableOpacity 
-              style={styles.createButton}
-              onPress={() => router.push('/(tabs)/habits')}
-            >
-              <Text style={styles.createButtonText}>Create Habit</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Motivational Quote */}
-        <View style={styles.quoteCard}>
-          <Ionicons name="bulb-outline" size={24} color="#AEFF00" />
-          <Text style={styles.quoteText}>
-            "The secret of getting ahead is getting started."
-          </Text>
-          <Text style={styles.quoteAuthor}>- Mark Twain</Text>
-        </View>
-      </ScrollView>
+      </View>
     </View>
   );
 }
 
+// ─── Home Screen ──────────────────────────────────────────────────────────────
+export default function Home() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [notificationCount] = useState(6);
+
+  const fetchPosts = useCallback(async () => {
+    try {
+      // TODO: Replace with real API call
+      // const response = await apiService.getPosts();
+      // setPosts(response.data);
+      setPosts([]);
+    } catch (error) {
+      console.error('Error fetching posts:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPosts();
+  }, [fetchPosts]);
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchPosts();
+  };
+
+  const handleLike = (id: string) => {
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.id === id ? { ...p, liked: !p.liked, likes: p.liked ? p.likes - 1 : p.likes + 1 } : p
+      )
+    );
+  };
+
+  const handleSave = (id: string) => {
+    setPosts((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, saved: !p.saved } : p))
+    );
+  };
+
+  return (
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <StatusBar barStyle="light-content" backgroundColor="#000" />
+
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.headerIconBtn}>
+          <Ionicons name="search" size={24} color="#FFF" />
+        </TouchableOpacity>
+
+        {/* "Routin" Logo */}
+        <View style={styles.logoRow}>
+          <Text style={styles.logoWhite}>Rou</Text>
+          <Text style={styles.logoGreen}>tin</Text>
+        </View>
+
+        {/* Bell with badge */}
+        <TouchableOpacity
+          style={styles.headerIconBtn}
+          onPress={() => router.push('/notifications')}
+        >
+          <Ionicons name="notifications-outline" size={24} color="#FFF" />
+          {notificationCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{notificationCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {/* Feed */}
+      {loading ? (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color="#AEFF00" />
+        </View>
+      ) : posts.length === 0 ? (
+        <View style={styles.centered}>
+          <Ionicons name="images-outline" size={64} color="#333" />
+          <Text style={styles.emptyTitle}>No posts yet</Text>
+          <Text style={styles.emptySubtitle}>Follow people to see their posts here</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={posts}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <PostCard post={item} onLike={handleLike} onSave={handleSave} />
+          )}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 100 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor="#AEFF00"
+            />
+          }
+        />
+      )}
+    </View>
+  );
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#161616',
-  },
-  scrollContent: {
-    padding: isWeb ? (isSmallScreen ? 16 : 24) : 20,
-    paddingBottom: 40,
+    backgroundColor: '#000',
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1A1A1A',
   },
-  greeting: {
-    color: '#727272',
-    fontSize: 16,
-    fontWeight: '400',
+  headerIconBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
   },
-  userName: {
-    color: '#FFFFFF',
-    fontSize: 28,
+  logoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  logoWhite: {
+    color: '#FFF',
+    fontSize: 22,
     fontWeight: '700',
-    marginTop: 4,
   },
-  logoutButton: {
+  logoGreen: {
+    color: '#AEFF00',
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  badge: {
+    position: 'absolute',
+    top: -2,
+    right: -4,
+    backgroundColor: '#FF0000',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  badgeText: {
+    color: '#FFF',
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  emptyTitle: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  emptySubtitle: {
+    color: '#555',
+    fontSize: 14,
+    textAlign: 'center',
+    paddingHorizontal: 40,
+  },
+});
+
+const cardStyles = StyleSheet.create({
+  container: {
+    backgroundColor: '#000',
+    marginBottom: 12,
+  },
+  imageArea: {
+    width: CARD_WIDTH,
+    height: CARD_WIDTH * 1.4,
+    backgroundColor: '#111',
+    borderRadius: 28,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  image: {
+    width: CARD_WIDTH,
+    height: CARD_WIDTH * 1.4,
+  },
+  imagePlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  userRow: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  avatarSmall: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#1F1F1F',
-    justifyContent: 'center',
+    backgroundColor: '#333',
     alignItems: 'center',
-    cursor: isWeb ? 'pointer' : undefined,
-  } as any,
-  welcomeCard: {
-    backgroundColor: '#1F1F1F',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 24,
-    borderLeftWidth: 4,
-    borderLeftColor: '#AEFF00',
+    justifyContent: 'center',
+    overflow: 'hidden',
   },
-  welcomeTitle: {
-    color: '#FFFFFF',
-    fontSize: 20,
+  avatarImg: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  },
+  usernameOverlay: {
+    color: '#FFF',
+    fontSize: 16,
     fontWeight: '700',
-    marginBottom: 8,
   },
-  welcomeText: {
-    color: '#B0B0B0',
-    fontSize: 14,
-    lineHeight: 20,
+  bookmarkBtn: {
+    position: 'absolute',
+    top: 22,
+    right: 16,
   },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 32,
-    flexWrap: 'wrap',
+  actions: {
+    position: 'absolute',
+    right: 14,
+    bottom: 60,
+    alignItems: 'center',
     gap: 12,
   },
-  statCard: {
-    flex: 1,
-    minWidth: isWeb && !isSmallScreen ? 150 : 100,
-    backgroundColor: '#1F1F1F',
-    borderRadius: 16,
-    padding: 16,
+  actionItem: {
     alignItems: 'center',
+    gap: 2,
   },
-  statIconContainer: {
-    marginBottom: 8,
-  },
-  statNumber: {
-    color: '#FFFFFF',
-    fontSize: 24,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  statLabel: {
-    color: '#727272',
+  actionCount: {
+    color: '#FFF',
     fontSize: 12,
-    fontWeight: '500',
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 16,
-  },
-  emptyState: {
-    backgroundColor: '#1F1F1F',
-    borderRadius: 16,
-    padding: 40,
-    alignItems: 'center',
-  },
-  emptyStateText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyStateSubtext: {
-    color: '#727272',
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  createButton: {
-    backgroundColor: '#AEFF00',
-    borderRadius: 87,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    cursor: isWeb ? 'pointer' : undefined,
-  } as any,
-  createButtonText: {
-    color: '#000000',
-    fontSize: 16,
     fontWeight: '700',
   },
-  quoteCard: {
-    backgroundColor: '#1F1F1F',
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
+  dotsRow: {
+    position: 'absolute',
+    bottom: 20,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
   },
-  quoteText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontStyle: 'italic',
-    textAlign: 'center',
-    marginTop: 12,
-    marginBottom: 8,
-    lineHeight: 24,
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.35)',
   },
-  quoteAuthor: {
-    color: '#AEFF00',
-    fontSize: 14,
-    fontWeight: '600',
+  dotActive: {
+    backgroundColor: '#FFF',
+    opacity: 1,
+  },
+  captionRow: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 4,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  captionUser: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  captionText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '400',
+    flex: 1,
+  },
+  timestamp: {
+    color: '#555',
+    fontSize: 10,
+    marginTop: 2,
   },
 });
