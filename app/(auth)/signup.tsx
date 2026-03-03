@@ -9,60 +9,85 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Dimensions,
+  Platform,
+  KeyboardAvoidingView,
+  Keyboard,
 } from "react-native";
 import { useRouter } from "expo-router";
 import apiService from "../../src/services/api.service";
 import { StorageService } from "../../src/utils/storage";
 import { validateSignUpForm } from "../../src/utils/validation";
+import { ImageBackground } from "react-native";
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const isWeb = Platform.OS === 'web';
+const isSmallScreen = SCREEN_WIDTH < 768;
 
 export default function SignUp() {
   const router = useRouter();
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSignUp = async () => {
-    // Validate form
-    const validation = validateSignUpForm(firstName, lastName, email, password);
-    if (!validation.isValid) {
-      const errorMessages = validation.errors.map(e => e.message).join('\n');
-      Alert.alert("Validation Error", errorMessages);
+    console.log('=== SIGNUP STARTED ===');
+    
+    // Basic validation
+    if (!fullName.trim()) {
+      Alert.alert("Validation Error", "Please enter your full name");
       return;
     }
+    if (!email.trim()) {
+      Alert.alert("Validation Error", "Please enter your email");
+      return;
+    }
+    if (password.length < 8) {
+      Alert.alert("Validation Error", "Password must be at least 8 characters");
+      return;
+    }
+    if (password !== confirmPassword) {
+      Alert.alert("Validation Error", "Passwords do not match");
+      return;
+    }
+
+    console.log('Validation passed, sending data:', {
+      fullName: fullName.trim(),
+      email: email.trim(),
+      passwordLength: password.length,
+    });
 
     setLoading(true);
     try {
       const response = await apiService.signUp({
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
+        fullName: fullName.trim(),
         email: email.trim(),
         password,
+        confirmPassword,
       });
+
+      console.log('API Response:', JSON.stringify(response, null, 2));
 
       if (response.success && response.data) {
         // Save token and user data
-        await StorageService.saveToken(response.data.token);
+        await StorageService.saveToken(response.data.accessToken);
         if (response.data.refreshToken) {
           await StorageService.saveRefreshToken(response.data.refreshToken);
         }
         await StorageService.saveUser(response.data.user);
 
-        Alert.alert("Success", "Account created successfully!", [
-          {
-            text: "OK",
-            onPress: () => {
-              // Navigate to main app (you'll need to create this route)
-              // router.replace("/(tabs)/home");
-              console.log("User signed up:", response.data?.user);
-            },
-          },
-        ]);
+        console.log('✅ Signup successful! Navigating to home...');
+        
+        // Navigate to home page
+        router.replace('/(tabs)/home');
       } else {
+        console.log('Signup failed:', response.error);
         Alert.alert("Sign Up Failed", response.error || "Unable to create account");
       }
     } catch (error: any) {
+      console.error('Signup error:', error);
       Alert.alert("Error", error.message || "Something went wrong");
     } finally {
       setLoading(false);
@@ -75,7 +100,7 @@ export default function SignUp() {
       const response = await apiService.googleSignIn("mock_google_token");
       
       if (response.success && response.data) {
-        await StorageService.saveToken(response.data.token);
+        await StorageService.saveToken(response.data.accessToken);
         await StorageService.saveUser(response.data.user);
         Alert.alert("Success", "Signed in with Google!");
         console.log("Google user:", response.data.user);
@@ -92,8 +117,21 @@ export default function SignUp() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
-
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ImageBackground
+        source={{ uri: 'https://cdn.builder.io/api/v1/image/assets/TEMP/54561f3262bb8537c5dc49ba77122da4d765f5a3?width=1526' }}
+        style={styles.backgroundImage}
+        blurRadius={2}
+      />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
         {/* Page Title */}
         <View style={styles.titleContainer}>
           <Text style={styles.pageTitle}>Sign up</Text>
@@ -123,28 +161,17 @@ export default function SignUp() {
             <Text style={styles.dividerText}>or</Text>
           </View>
 
-          {/* Name Inputs Row */}
-          <View style={styles.nameRow}>
-            <View style={styles.nameInput}>
-              <TextInput
-                style={styles.input}
-                placeholder="First Name"
-                placeholderTextColor="#727272"
-                value={firstName}
-                onChangeText={setFirstName}
-                editable={!loading}
-              />
-            </View>
-            <View style={styles.nameInput}>
-              <TextInput
-                style={styles.input}
-                placeholder="Last Name"
-                placeholderTextColor="#727272"
-                value={lastName}
-                onChangeText={setLastName}
-                editable={!loading}
-              />
-            </View>
+          {/* Full Name Input */}
+          <View style={styles.fullInput}>
+            <TextInput
+              style={styles.input}
+              placeholder="Full Name"
+              placeholderTextColor="#727272"
+              value={fullName}
+              onChangeText={setFullName}
+              editable={!loading}
+              autoCapitalize="words"
+            />
           </View>
 
           {/* Email Input */}
@@ -155,6 +182,8 @@ export default function SignUp() {
               placeholderTextColor="#727272"
               value={email}
               onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
               editable={!loading}
             />
           </View>
@@ -163,12 +192,29 @@ export default function SignUp() {
           <View style={styles.fullInput}>
             <TextInput
               style={styles.input}
-              placeholder="Password (min 8 chars, 1 uppercase, 1 number)"
+              placeholder="Password (min 8 characters)"
               placeholderTextColor="#727272"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
+              autoCapitalize="none"
               editable={!loading}
+            />
+          </View>
+
+          {/* Confirm Password Input */}
+          <View style={styles.fullInput}>
+            <TextInput
+              style={styles.input}
+              placeholder="Confirm Password"
+              placeholderTextColor="#727272"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry
+              autoCapitalize="none"
+              editable={!loading}
+              returnKeyType="done"
+              onSubmitEditing={Keyboard.dismiss}
             />
           </View>
 
@@ -210,6 +256,7 @@ export default function SignUp() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -219,9 +266,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#161616",
   },
+    backgroundImage: {
+    position: 'absolute',
+    width: isWeb ? '100%' : 763,
+    height: isWeb ? '100%' : 954,
+    left: isWeb ? 0 : -288,
+    top: isWeb ? 0 : -80,
+  },
+  
   scrollContent: {
     flexGrow: 1,
     justifyContent: "space-between",
+    alignItems: isWeb ? 'center' : 'stretch',
   },
   statusBar: {
     flexDirection: "row",
@@ -311,13 +367,13 @@ const styles = StyleSheet.create({
   },
   titleContainer: {
     alignItems: "center",
-    marginTop: 94,
-    marginBottom: 78,
+    marginTop: isWeb ? (isSmallScreen ? 60 : 94) : 94,
+    marginBottom: isWeb ? (isSmallScreen ? 40 : 78) : 78,
   },
   pageTitle: {
-    color: "#FFFFFF",
+    color: "#000000",
     fontFamily: "SF Pro Display",
-    fontSize: 66,
+    fontSize: isWeb ? (isSmallScreen ? 48 : 66) : 66,
     fontWeight: "700",
     textAlign: "center",
   },
@@ -325,19 +381,23 @@ const styles = StyleSheet.create({
     backgroundColor: "#000000",
     borderTopLeftRadius: 50,
     borderTopRightRadius: 50,
-    paddingHorizontal: 62,
-    paddingTop: 47,
+    paddingHorizontal: isWeb ? (isSmallScreen ? 32 : 62) : 62,
+    paddingTop: isWeb ? (isSmallScreen ? 32 : 47) : 47,
     paddingBottom: 40,
-    minHeight: 508,
+    minHeight: isWeb ? 'auto' : 508,
+    width: isWeb ? '100%' : undefined,
+    maxWidth: isWeb ? 500 : undefined,
+    alignSelf: isWeb ? 'center' : undefined,
   },
   googleButton: {
     borderWidth: 1,
     borderColor: "#C3C3C3",
     borderRadius: 87.273,
-    height: 40,
+    height: isWeb ? 48 : 40,
     justifyContent: "center",
     marginBottom: 15,
-  },
+    cursor: isWeb ? 'pointer' : undefined,
+  } as any,
   socialButtonContent: {
     flexDirection: "row",
     alignItems: "center",
@@ -398,26 +458,13 @@ const styles = StyleSheet.create({
   dividerText: {
     color: "#FFFFFF",
     fontFamily: "SF Pro Display",
-    fontSize: 27,
+    fontSize: isWeb ? (isSmallScreen ? 20 : 27) : 27,
     fontWeight: "600",
-  },
-  nameRow: {
-    flexDirection: "row",
-    gap: 14,
-    marginBottom: 8,
-  },
-  nameInput: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 87.273,
-    height: 36,
-    justifyContent: "center",
-    paddingHorizontal: 13,
   },
   fullInput: {
     backgroundColor: "#FFFFFF",
     borderRadius: 87.273,
-    height: 36,
+    height: isWeb ? 48 : 36,
     justifyContent: "center",
     paddingHorizontal: 13,
     marginBottom: 8,
@@ -425,22 +472,24 @@ const styles = StyleSheet.create({
   input: {
     color: "#000000",
     fontFamily: "SF Pro Display",
-    fontSize: 12,
+    fontSize: isWeb ? 16 : 12,
     fontWeight: "600",
-  },
+    outlineStyle: isWeb ? 'none' : undefined,
+  } as any,
   createAccountButton: {
     backgroundColor: "#AEFF00",
     borderRadius: 87.273,
-    height: 36,
+    height: isWeb ? 48 : 36,
     justifyContent: "center",
     alignItems: "center",
     marginTop: 8,
     marginBottom: 15,
-  },
+    cursor: isWeb ? 'pointer' : undefined,
+  } as any,
   createAccountButtonText: {
     color: "#000000",
     fontFamily: "SF Pro Display",
-    fontSize: 14,
+    fontSize: isWeb ? 16 : 14,
     fontWeight: "700",
   },
   termsContainer: {
@@ -462,7 +511,8 @@ const styles = StyleSheet.create({
   },
   loginContainer: {
     alignItems: "center",
-  },
+    cursor: isWeb ? 'pointer' : undefined,
+  } as any,
   loginText: {
     color: "#FFFFFF",
     fontFamily: "SF Pro Display",

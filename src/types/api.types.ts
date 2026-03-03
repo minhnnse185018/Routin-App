@@ -5,9 +5,20 @@ export interface LoginRequest {
 }
 
 export interface SignUpRequest {
-  firstName: string;
-  lastName: string;
+  fullName: string;
   email: string;
+  password: string;
+  confirmPassword: string;
+}
+
+export interface SendOTPRequest {
+  email: string;
+}
+
+export interface VerifyOTPRequest {
+  email: string;
+  code: string;
+  fullName: string;
   password: string;
 }
 
@@ -20,9 +31,11 @@ export interface SocialAuthRequest {
 export interface User {
   id: string;
   email: string;
-  firstName: string;
-  lastName: string;
-  avatar?: string;
+  fullName: string;
+  avatarUrl?: string | null;
+  bio?: string | null;
+  authProvider: number;
+  isEmailVerified: boolean;
   createdAt: string;
 }
 
@@ -30,9 +43,11 @@ export interface AuthResponse {
   success: boolean;
   message?: string;
   data?: {
-    token: string;
+    accessToken: string;
     refreshToken?: string;
+    expiresAt?: string;
     user: User;
+    roles?: string[];
   };
   error?: string;
 }

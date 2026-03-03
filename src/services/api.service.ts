@@ -1,11 +1,8 @@
 import { API_ENDPOINTS } from '../config/api.config';
 import { AuthResponse, LoginRequest, SignUpRequest, ApiResponse } from '../types/api.types';
-import mockApiService from './mockApi.service';
 import Constants from 'expo-constants';
 
-// Check if we should use mock API
-const USE_MOCK_API = Constants.expoConfig?.extra?.useMockApi ?? true; // Default to true for development
-const API_BASE_URL = Constants.expoConfig?.extra?.apiBaseUrl || 'http://localhost:3000/api';
+const API_BASE_URL = Constants.expoConfig?.extra?.apiBaseUrl || 'https://routin.onrender.com';
 const API_TIMEOUT = parseInt(Constants.expoConfig?.extra?.apiTimeout || '30000', 10);
 
 class ApiService {
@@ -25,6 +22,15 @@ class ApiService {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
+    const url = `${this.baseURL}${endpoint}`;
+    console.log('🌐 API Request:', {
+      url,
+      method: options.method || 'GET',
+      hasBody: !!options.body,
+      baseURL: this.baseURL,
+      endpoint,
+    });
+
     try {
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -35,7 +41,7 @@ class ApiService {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
+      const response = await fetch(url, {
         ...options,
         headers,
         signal: controller.signal,
@@ -43,7 +49,10 @@ class ApiService {
 
       clearTimeout(timeoutId);
 
+      console.log('📥 API Response Status:', response.status, response.statusText);
+
       const data = await response.json();
+      console.log('📦 API Response Data:', data);
 
       if (!response.ok) {
         return {
@@ -61,6 +70,8 @@ class ApiService {
     } catch (error: any) {
       clearTimeout(timeoutId);
 
+      console.error('❌ API Error:', error);
+
       if (error.name === 'AbortError') {
         return {
           success: false,
@@ -77,10 +88,6 @@ class ApiService {
 
   // Auth Methods
   async login(data: LoginRequest): Promise<AuthResponse> {
-    if (USE_MOCK_API) {
-      return mockApiService.login(data);
-    }
-
     return this.request<AuthResponse['data']>(API_ENDPOINTS.AUTH.LOGIN, {
       method: 'POST',
       body: JSON.stringify(data),
@@ -88,21 +95,13 @@ class ApiService {
   }
 
   async signUp(data: SignUpRequest): Promise<AuthResponse> {
-    if (USE_MOCK_API) {
-      return mockApiService.signUp(data);
-    }
-
-    return this.request<AuthResponse['data']>(API_ENDPOINTS.AUTH.SIGNUP, {
+    return this.request<AuthResponse['data']>(API_ENDPOINTS.AUTH.REGISTER, {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
   async googleSignIn(token: string): Promise<AuthResponse> {
-    if (USE_MOCK_API) {
-      return mockApiService.googleSignIn();
-    }
-
     return this.request<AuthResponse['data']>(API_ENDPOINTS.AUTH.GOOGLE_AUTH, {
       method: 'POST',
       body: JSON.stringify({ token }),
@@ -110,10 +109,6 @@ class ApiService {
   }
 
   async facebookSignIn(token: string): Promise<AuthResponse> {
-    if (USE_MOCK_API) {
-      return mockApiService.facebookSignIn();
-    }
-
     return this.request<AuthResponse['data']>(API_ENDPOINTS.AUTH.FACEBOOK_AUTH, {
       method: 'POST',
       body: JSON.stringify({ token }),
@@ -121,10 +116,6 @@ class ApiService {
   }
 
   async appleSignIn(token: string): Promise<AuthResponse> {
-    if (USE_MOCK_API) {
-      return mockApiService.appleSignIn();
-    }
-
     return this.request<AuthResponse['data']>(API_ENDPOINTS.AUTH.APPLE_AUTH, {
       method: 'POST',
       body: JSON.stringify({ token }),
@@ -132,11 +123,6 @@ class ApiService {
   }
 
   async logout(token: string): Promise<ApiResponse<void>> {
-    if (USE_MOCK_API) {
-      const result = await mockApiService.logout();
-      return { success: true, data: result.data };
-    }
-
     return this.request<void>(API_ENDPOINTS.AUTH.LOGOUT, {
       method: 'POST',
     }, token);
