@@ -22,6 +22,19 @@ export interface VerifyOTPRequest {
   password: string;
 }
 
+export interface VerifyOTPResponse {
+  success: boolean;
+  message?: string;
+  data?: {
+    accessToken: string;
+    refreshToken?: string;
+    expiresAt?: string;
+    user: User;
+    roles?: string[];
+  };
+  error?: string;
+}
+
 export interface SocialAuthRequest {
   token: string;
   provider: 'google' | 'facebook' | 'apple';

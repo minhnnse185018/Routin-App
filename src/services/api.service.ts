@@ -8,10 +8,14 @@ const API_TIMEOUT = parseInt(Constants.expoConfig?.extra?.apiTimeout || '30000',
 class ApiService {
   private baseURL: string;
   private timeout: number;
+  private maxRetries: number;
+  private retryDelay: number;
 
   constructor() {
     this.baseURL = API_BASE_URL;
     this.timeout = API_TIMEOUT;
+    this.maxRetries = 2; // Reduced from 3 to be more reasonable
+    this.retryDelay = 1000; // 1 second delay between retries
   }
 
   private async request<T>(
@@ -19,71 +23,89 @@ class ApiService {
     options: RequestInit = {},
     token?: string
   ): Promise<ApiResponse<T>> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+    let lastError: any;
 
-    const url = `${this.baseURL}${endpoint}`;
-    console.log('🌐 API Request:', {
-      url,
-      method: options.method || 'GET',
-      hasBody: !!options.body,
-      baseURL: this.baseURL,
-      endpoint,
-    });
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
-    try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        ...(options.headers as Record<string, string>),
-      };
-
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-
-      const response = await fetch(url, {
-        ...options,
-        headers,
-        signal: controller.signal,
+      const url = `${this.baseURL}${endpoint}`;
+      console.log(`🌐 API Request (attempt ${attempt + 1}/${this.maxRetries + 1}):`, {
+        url,
+        method: options.method || 'GET',
+        hasBody: !!options.body,
+        baseURL: this.baseURL,
+        endpoint,
       });
 
-      clearTimeout(timeoutId);
-
-      console.log('📥 API Response Status:', response.status, response.statusText);
-
-      const data = await response.json();
-      console.log('📦 API Response Data:', data);
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: data.message || data.error || 'Something went wrong',
-          statusCode: response.status,
+      try {
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+          ...(options.headers as Record<string, string>),
         };
-      }
 
-      return {
-        success: true,
-        data: data.data || data,
-        message: data.message,
-      };
-    } catch (error: any) {
-      clearTimeout(timeoutId);
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
 
-      console.error('❌ API Error:', error);
+        const response = await fetch(url, {
+          ...options,
+          headers,
+          signal: controller.signal,
+        });
 
-      if (error.name === 'AbortError') {
+        clearTimeout(timeoutId);
+
+        console.log('📥 API Response Status:', response.status, response.statusText);
+
+        const data = await response.json();
+        console.log('📦 API Response Data:', data);
+
+        if (!response.ok) {
+          return {
+            success: false,
+            error: data.message || data.error || 'Something went wrong',
+            statusCode: response.status,
+          };
+        }
+
         return {
-          success: false,
-          error: 'Request timeout. Please try again.',
+          success: true,
+          data: data.data || data,
+          message: data.message,
         };
-      }
+      } catch (error: any) {
+        clearTimeout(timeoutId);
 
+        console.error(`❌ API Error (attempt ${attempt + 1}):`, error);
+        lastError = error;
+
+        // Only retry on AbortError (timeout) or network errors
+        if (error.name === 'AbortError' || error.message?.includes('Network request failed')) {
+          if (attempt < this.maxRetries) {
+            console.log(`⏳ Retrying in ${this.retryDelay}ms... (${attempt + 1}/${this.maxRetries})`);
+            await new Promise(resolve => setTimeout(resolve, this.retryDelay));
+            continue;
+          }
+        }
+
+        // For non-timeout errors, don't retry
+        break;
+      }
+    }
+
+    // Handle final error
+    if (lastError.name === 'AbortError') {
       return {
         success: false,
-        error: error.message || 'Network error. Please check your connection.',
+        error: 'Request timeout. The server may be waking up from sleep. Please try again.',
       };
     }
+
+    return {
+      success: false,
+      error: lastError.message || 'Network error. Please check your connection.',
+    };
   }
 
   // Auth Methods
