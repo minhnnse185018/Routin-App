@@ -29,6 +29,7 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('');
 
   const handleLogin = async () => {
     console.log('🔵 Login button pressed');
@@ -48,6 +49,15 @@ export default function Login() {
 
     console.log('✅ Validation passed, starting login...');
     setLoading(true);
+    setLoadingMessage('Connecting to server...');
+
+    // Add a small delay to show the initial message, then update
+    setTimeout(() => {
+      if (loading) {
+        setLoadingMessage('Server is waking up, please wait...');
+      }
+    }, 3000);
+
     try {
       const response = await apiService.login({
         email: email.trim(),
@@ -69,17 +79,35 @@ export default function Login() {
         // Navigate to home page
         router.replace('/(tabs)/home');
       } else {
-        Alert.alert('Login Failed', response.error || 'Invalid credentials');
+        const errorMessage = response.error || 'Invalid credentials';
+        console.log('❌ Login failed:', errorMessage);
+        
+        // Provide more specific error messages
+        if (errorMessage.includes('timeout') || errorMessage.includes('waking up')) {
+          Alert.alert('Connection Issue', 'The server is taking longer than expected to respond. This is normal for the first request after a period of inactivity. Please try again.');
+        } else {
+          Alert.alert('Login Failed', errorMessage);
+        }
       }
     } catch (error: any) {
+      console.log('❌ Login error:', error);
       Alert.alert('Error', error.message || 'Something went wrong');
     } finally {
       setLoading(false);
+      setLoadingMessage('');
     }
   };
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
+    setLoadingMessage('Connecting to server...');
+
+    setTimeout(() => {
+      if (loading) {
+        setLoadingMessage('Server is waking up, please wait...');
+      }
+    }, 3000);
+
     try {
       const response = await apiService.googleSignIn('mock_google_token');
       
@@ -89,17 +117,31 @@ export default function Login() {
         Alert.alert('Success', 'Signed in with Google!');
         console.log('Google user:', response.data.user);
       } else {
-        Alert.alert('Error', response.error || 'Google sign in failed');
+        const errorMessage = response.error || 'Google sign in failed';
+        if (errorMessage.includes('timeout') || errorMessage.includes('waking up')) {
+          Alert.alert('Connection Issue', 'The server is taking longer than expected to respond. This is normal for the first request after a period of inactivity. Please try again.');
+        } else {
+          Alert.alert('Error', errorMessage);
+        }
       }
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Something went wrong');
     } finally {
       setLoading(false);
+      setLoadingMessage('');
     }
   };
 
   const handleFacebookSignIn = async () => {
     setLoading(true);
+    setLoadingMessage('Connecting to server...');
+
+    setTimeout(() => {
+      if (loading) {
+        setLoadingMessage('Server is waking up, please wait...');
+      }
+    }, 3000);
+
     try {
       const response = await apiService.facebookSignIn('mock_facebook_token');
       
@@ -108,17 +150,31 @@ export default function Login() {
         await StorageService.saveUser(response.data.user);
         Alert.alert('Success', 'Signed in with Facebook!');
       } else {
-        Alert.alert('Error', response.error || 'Facebook sign in failed');
+        const errorMessage = response.error || 'Facebook sign in failed';
+        if (errorMessage.includes('timeout') || errorMessage.includes('waking up')) {
+          Alert.alert('Connection Issue', 'The server is taking longer than expected to respond. This is normal for the first request after a period of inactivity. Please try again.');
+        } else {
+          Alert.alert('Error', errorMessage);
+        }
       }
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Something went wrong');
     } finally {
       setLoading(false);
+      setLoadingMessage('');
     }
   };
 
   const handleAppleSignIn = async () => {
     setLoading(true);
+    setLoadingMessage('Connecting to server...');
+
+    setTimeout(() => {
+      if (loading) {
+        setLoadingMessage('Server is waking up, please wait...');
+      }
+    }, 3000);
+
     try {
       const response = await apiService.appleSignIn('mock_apple_token');
       
@@ -127,12 +183,18 @@ export default function Login() {
         await StorageService.saveUser(response.data.user);
         Alert.alert('Success', 'Signed in with Apple!');
       } else {
-        Alert.alert('Error', response.error || 'Apple sign in failed');
+        const errorMessage = response.error || 'Apple sign in failed';
+        if (errorMessage.includes('timeout') || errorMessage.includes('waking up')) {
+          Alert.alert('Connection Issue', 'The server is taking longer than expected to respond. This is normal for the first request after a period of inactivity. Please try again.');
+        } else {
+          Alert.alert('Error', errorMessage);
+        }
       }
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Something went wrong');
     } finally {
       setLoading(false);
+      setLoadingMessage('');
     }
   };
 
@@ -213,7 +275,12 @@ return (
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color="#000000" />
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator color="#000000" />
+                {loadingMessage ? (
+                  <Text style={styles.loadingText}>{loadingMessage}</Text>
+                ) : null}
+              </View>
             ) : (
               <Text style={styles.loginButtonText}>Login</Text>
             )}
@@ -459,6 +526,17 @@ const styles = StyleSheet.create({
     fontFamily: 'SF Pro Display',
     fontSize: 20,
     fontWeight: '700',
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  loadingText: {
+    color: '#000000',
+    fontFamily: 'SF Pro Display',
+    fontSize: 14,
+    fontWeight: '600',
   },
   socialButton: {
     borderWidth: 1,
