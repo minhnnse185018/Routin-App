@@ -2,7 +2,10 @@ import { API_ENDPOINTS } from '../config/api.config';
 import { AuthResponse, LoginRequest, SignUpRequest, ApiResponse } from '../types/api.types';
 import Constants from 'expo-constants';
 
-const API_BASE_URL = Constants.expoConfig?.extra?.apiBaseUrl || 'https://routin.onrender.com';
+const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_BASE_URL ||
+  Constants.expoConfig?.extra?.apiBaseUrl ||
+  'https://routin.onrender.com';
 const API_TIMEOUT = parseInt(Constants.expoConfig?.extra?.apiTimeout || '30000', 10);
 
 class ApiService {
@@ -12,10 +15,21 @@ class ApiService {
   private retryDelay: number;
 
   constructor() {
-    this.baseURL = API_BASE_URL;
+    this.baseURL = API_BASE_URL.replace(/\/+$/, '');
     this.timeout = API_TIMEOUT;
     this.maxRetries = 2; // Reduced from 3 to be more reasonable
     this.retryDelay = 1000; // 1 second delay between retries
+  }
+
+  private isRetryableNetworkError(error: any): boolean {
+    if (!error) return false;
+    const msg = String(error.message || '').toLowerCase();
+    return (
+      error.name === 'AbortError' ||
+      msg.includes('network request failed') ||
+      msg.includes('failed to fetch') ||
+      msg.includes('load failed')
+    );
   }
 
   private async request<T>(
@@ -80,8 +94,8 @@ class ApiService {
         console.error(`❌ API Error (attempt ${attempt + 1}):`, error);
         lastError = error;
 
-        // Only retry on AbortError (timeout) or network errors
-        if (error.name === 'AbortError' || error.message?.includes('Network request failed')) {
+        // Retry on timeout/network errors (React Native + Web wording variants)
+        if (this.isRetryableNetworkError(error)) {
           if (attempt < this.maxRetries) {
             console.log(`⏳ Retrying in ${this.retryDelay}ms... (${attempt + 1}/${this.maxRetries})`);
             await new Promise(resolve => setTimeout(resolve, this.retryDelay));
@@ -95,10 +109,18 @@ class ApiService {
     }
 
     // Handle final error
-    if (lastError.name === 'AbortError') {
+    if (lastError?.name === 'AbortError') {
       return {
         success: false,
         error: 'Request timeout. The server may be waking up from sleep. Please try again.',
+      };
+    }
+
+    const lowerMessage = String(lastError?.message || '').toLowerCase();
+    if (lowerMessage.includes('failed to fetch') || lowerMessage.includes('network request failed')) {
+      return {
+        success: false,
+        error: `Cannot reach API at ${this.baseURL}. Please check API URL/CORS/server status and try again.`,
       };
     }
 
@@ -165,6 +187,13 @@ class ApiService {
   async put<T>(endpoint: string, body: any, token?: string): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, {
       method: 'PUT',
+      body: JSON.stringify(body),
+    }, token);
+  }
+
+  async patch<T>(endpoint: string, body: any, token?: string): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: 'PATCH',
       body: JSON.stringify(body),
     }, token);
   }

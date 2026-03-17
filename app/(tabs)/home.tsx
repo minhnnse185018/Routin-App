@@ -11,13 +11,18 @@ import {
   ScrollView,
   ActivityIndicator,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import apiService from '../../src/services/api.service';
+import { StorageService } from '../../src/utils/storage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARD_WIDTH = SCREEN_WIDTH - 0;
+const isWeb = Platform.OS === 'web';
+const CONTENT_WIDTH = isWeb ? Math.min(SCREEN_WIDTH, 560) : SCREEN_WIDTH;
+const CARD_WIDTH = CONTENT_WIDTH - 28;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Post = {
@@ -33,6 +38,36 @@ type Post = {
   shares: number;
   liked: boolean;
   saved: boolean;
+};
+
+const mapRoutineImage = (routine: any, index: number): string => {
+  const mediaFromTasks = Array.isArray(routine?.tasks)
+    ? routine.tasks.find((t: any) => typeof t?.mediaUrl === 'string' && t.mediaUrl)?.mediaUrl
+    : undefined;
+  const mediaFromRoutine = typeof routine?.mediaUrl === 'string' ? routine.mediaUrl : undefined;
+
+  if (mediaFromTasks) return mediaFromTasks;
+  if (mediaFromRoutine) return mediaFromRoutine;
+  return `https://picsum.photos/seed/routin-${routine?.id || index}/1200/1600`;
+};
+
+const mapRoutineToPost = (routine: any, index: number, username: string, avatarUrl?: string): Post => {
+  const title = routine?.title || routine?.name || 'Routine';
+  const desc = routine?.description || 'Stay consistent and keep improving.';
+  return {
+    id: String(routine?.id || `routine-${index}`),
+    userId: String(routine?.userId || 'me'),
+    username,
+    avatarUrl,
+    images: [mapRoutineImage(routine, index)],
+    caption: `${title}: ${desc}`,
+    timestamp: routine?.updatedAt || routine?.createdAt ? 'updated recently' : 'today',
+    likes: Math.max(Number(routine?.copiedCount || 0), 0),
+    comments: Math.max(Number(routine?.reviewCount || 0), 0),
+    shares: Math.max(Number(routine?.shareCount || 0), 0),
+    liked: false,
+    saved: false,
+  };
 };
 
 // ─── Post Card ────────────────────────────────────────────────────────────────
@@ -148,12 +183,22 @@ export default function Home() {
 
   const fetchPosts = useCallback(async () => {
     try {
-      // TODO: Replace with real API call
-      // const response = await apiService.getPosts();
-      // setPosts(response.data);
-      setPosts([]);
+      const token = await StorageService.getToken();
+      const user = await StorageService.getUser();
+
+      const routinesResponse = await apiService.get<any[]>('/api/routines/me', token || undefined);
+      if (routinesResponse.success && Array.isArray(routinesResponse.data)) {
+        const username = (user?.email || 'you').split('@')[0] || 'you';
+        const mapped = routinesResponse.data.map((routine, index) =>
+          mapRoutineToPost(routine, index, username, user?.avatarUrl || undefined)
+        );
+        setPosts(mapped);
+      } else {
+        setPosts([]);
+      }
     } catch (error) {
       console.error('Error fetching posts:', error);
+      setPosts([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -186,62 +231,66 @@ export default function Home() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
+      <View style={styles.shell}>
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.headerIconBtn}>
-          <Ionicons name="search" size={24} color="#FFF" />
-        </TouchableOpacity>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.headerIconBtn}>
+            <Ionicons name="search" size={26} color="#FFF" />
+          </TouchableOpacity>
 
-        {/* "Routin" Logo */}
-        <View style={styles.logoRow}>
-          <Text style={styles.logoWhite}>Rou</Text>
-          <Text style={styles.logoGreen}>tin</Text>
+          {/* "Routin" Logo */}
+          <View style={styles.logoRow}>
+            <Text style={styles.logoWhite}>Rou</Text>
+            <Text style={styles.logoGreen}>tin</Text>
+          </View>
+
+          {/* Bell with badge */}
+          <TouchableOpacity
+            style={styles.headerIconBtn}
+            onPress={() => router.push('/notifications')}
+          >
+            <Ionicons name="notifications-outline" size={26} color="#FFF" />
+            {notificationCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{notificationCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
 
-        {/* Bell with badge */}
-        <TouchableOpacity
-          style={styles.headerIconBtn}
-          onPress={() => router.push('/notifications')}
-        >
-          <Ionicons name="notifications-outline" size={24} color="#FFF" />
-          {notificationCount > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{notificationCount}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+        {/* Feed */}
+        {loading ? (
+          <View style={styles.centered}>
+            <ActivityIndicator size="large" color="#AEFF00" />
+          </View>
+        ) : posts.length === 0 ? (
+          <View style={styles.centered}>
+            <Ionicons name="images-outline" size={64} color="#333" />
+            <Text style={styles.emptyTitle}>No posts yet</Text>
+            <Text style={styles.emptySubtitle}>Follow people to see their posts here</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={posts}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <View style={styles.postRow}>
+                <PostCard post={item} onLike={handleLike} onSave={handleSave} />
+              </View>
+            )}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.feedContent}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                tintColor="#AEFF00"
+              />
+            }
+          />
+        )}
       </View>
-
-      {/* Feed */}
-      {loading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#AEFF00" />
-        </View>
-      ) : posts.length === 0 ? (
-        <View style={styles.centered}>
-          <Ionicons name="images-outline" size={64} color="#333" />
-          <Text style={styles.emptyTitle}>No posts yet</Text>
-          <Text style={styles.emptySubtitle}>Follow people to see their posts here</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={posts}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <PostCard post={item} onLike={handleLike} onSave={handleSave} />
-          )}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 100 }}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              tintColor="#AEFF00"
-            />
-          }
-        />
-      )}
     </View>
   );
 }
@@ -250,16 +299,24 @@ export default function Home() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#060606',
+  },
+  shell: {
+    flex: 1,
+    width: CONTENT_WIDTH,
+    alignSelf: 'center',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1A1A1A',
+    paddingVertical: 10,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    backgroundColor: '#000000',
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#242424',
   },
   headerIconBtn: {
     width: 36,
@@ -305,6 +362,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 12,
   },
+  postRow: {
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  feedContent: {
+    paddingBottom: 130,
+  },
   emptyTitle: {
     color: '#FFF',
     fontSize: 18,
@@ -322,18 +386,21 @@ const cardStyles = StyleSheet.create({
   container: {
     backgroundColor: '#000',
     marginBottom: 12,
+    width: CARD_WIDTH,
   },
   imageArea: {
     width: CARD_WIDTH,
-    height: CARD_WIDTH * 1.4,
-    backgroundColor: '#111',
-    borderRadius: 28,
+    height: CARD_WIDTH * 1.32,
+    backgroundColor: '#101010',
+    borderRadius: 34,
     overflow: 'hidden',
     position: 'relative',
+    borderWidth: 1,
+    borderColor: '#262626',
   },
   image: {
     width: CARD_WIDTH,
-    height: CARD_WIDTH * 1.4,
+    height: CARD_WIDTH * 1.32,
   },
   imagePlaceholder: {
     flex: 1,
@@ -342,7 +409,7 @@ const cardStyles = StyleSheet.create({
   },
   userRow: {
     position: 'absolute',
-    top: 16,
+    top: 14,
     left: 16,
     flexDirection: 'row',
     alignItems: 'center',
@@ -369,15 +436,15 @@ const cardStyles = StyleSheet.create({
   },
   bookmarkBtn: {
     position: 'absolute',
-    top: 22,
+    top: 18,
     right: 16,
   },
   actions: {
     position: 'absolute',
-    right: 14,
-    bottom: 60,
+    right: 12,
+    bottom: 72,
     alignItems: 'center',
-    gap: 12,
+    gap: 16,
   },
   actionItem: {
     alignItems: 'center',
@@ -385,7 +452,7 @@ const cardStyles = StyleSheet.create({
   },
   actionCount: {
     color: '#FFF',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
   },
   dotsRow: {
@@ -408,9 +475,9 @@ const cardStyles = StyleSheet.create({
     opacity: 1,
   },
   captionRow: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 4,
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 6,
     flexDirection: 'row',
     alignItems: 'flex-start',
   },

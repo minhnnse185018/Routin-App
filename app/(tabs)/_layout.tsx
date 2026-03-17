@@ -1,6 +1,7 @@
-import { Tabs, useRouter } from 'expo-router';
-import React from 'react';
+import { Redirect, Tabs } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   View,
   TouchableOpacity,
   StyleSheet,
@@ -9,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StorageService } from '../../src/utils/storage';
 
 const TAB_ROUTES = [
   { name: 'home', icon: 'home-outline', iconActive: 'home' },
@@ -84,6 +86,39 @@ function CustomTabBar({ state, navigation }: any) {
 }
 
 export default function TabsLayout() {
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [authenticated, setAuthenticated] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const checkAuth = async () => {
+      const isAuthenticated = await StorageService.isAuthenticated();
+      if (mounted) {
+        setAuthenticated(isAuthenticated);
+        setCheckingAuth(false);
+      }
+    };
+
+    checkAuth();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  if (checkingAuth) {
+    return (
+      <View style={styles.authLoadingRoot}>
+        <ActivityIndicator size="large" color="#95FF00" />
+      </View>
+    );
+  }
+
+  if (!authenticated) {
+    return <Redirect href="/(auth)/login" />;
+  }
+
   return (
     <Tabs
       tabBar={(props) => <CustomTabBar {...props} />}
@@ -96,11 +131,19 @@ export default function TabsLayout() {
       <Tabs.Screen name="explore" />
       <Tabs.Screen name="messages" />
       <Tabs.Screen name="profile" />
+      <Tabs.Screen name="routine/new" options={{ href: null }} />
+      <Tabs.Screen name="routine/[id]" options={{ href: null }} />
     </Tabs>
   );
 }
 
 const styles = StyleSheet.create({
+  authLoadingRoot: {
+    flex: 1,
+    backgroundColor: '#0D0F13',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   tabBarWrapper: {
     position: 'absolute',
     bottom: 0,
